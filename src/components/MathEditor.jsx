@@ -7,10 +7,12 @@ const MathEditor = ({
   onSaveFormula,
   setMathEditorVisible,
   expressionEditable,
-  setExpressionEditable
+  setExpressionEditable,
+  initialLatex = ''
 }) => {
-  const [latex, setLatex] = useState('');
+  const [latex, setLatex] = useState(initialLatex);
   const mathFieldRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const mathElement = document.getElementById('math');
@@ -50,6 +52,14 @@ const MathEditor = ({
     }
   }, [latex]);
 
+  // Prefill when initialLatex changes (e.g., when editing)
+  useEffect(() => {
+    setLatex(initialLatex || '');
+    if (inputRef.current) {
+      inputRef.current.value = initialLatex || '';
+    }
+  }, [initialLatex]);
+
   const handleSave = () => {
     onSaveFormula(latex);
   };
@@ -69,6 +79,12 @@ const MathEditor = ({
         value={latex}
         readOnly
         spellCheck="false"
+      />
+      <input
+        ref={inputRef}
+        value={latex}
+        onChange={e => setLatex(e.target.value)}
+        style={{ display: 'none' }}
       />
       <div className="buttons">
         <button
