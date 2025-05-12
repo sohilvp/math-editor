@@ -1,7 +1,9 @@
+// MarkdownPreview.js
 import React from 'react';
 import TurndownService from 'turndown';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { InlineMath, BlockMath } from 'react-katex';
 
 const htmlToMarkdown = (html) => {
   const turndownService = new TurndownService({
@@ -12,15 +14,11 @@ const htmlToMarkdown = (html) => {
     bulletListMarker: '-',
   });
 
-  // Add rule for underline: convert <u>...</u> to _..._ in markdown
   turndownService.addRule('underline', {
     filter: ['u'],
-    replacement: function(content) {
-      return `_${content}_`;
-    }
+    replacement: (content) => `_${content}_`,
   });
 
-  // Rule to convert Quill's formula spans to LaTeX Markdown
   turndownService.addRule('formula', {
     filter: (node) =>
       node.nodeName === 'SPAN' &&
@@ -28,24 +26,21 @@ const htmlToMarkdown = (html) => {
       node.getAttribute('data-value'),
     replacement: (content, node) => {
       const latex = node.getAttribute('data-value') || '';
-      const isBlock = latex.includes('\n') || latex.includes('\\begin');
-
-      // Use block math syntax for multiline or environment equations
-      return isBlock ? `\n\n$$\n${latex}\n$$\n\n` : `$${latex}$`;
-    }
+      return `$$\n${latex}\n$$`;
+    },
   });
 
   return turndownService.turndown(html).trim();
 };
 
 const MarkdownPreview = ({ html }) => {
-  // Convert HTML to Markdown (with LaTeX code)
   const markdown = htmlToMarkdown(html);
+  const lines = markdown.split('\n');
 
   return (
     <div>
       <h3>Markdown Output</h3>
-      <pre
+      <div
         style={{
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
@@ -53,11 +48,25 @@ const MarkdownPreview = ({ html }) => {
           padding: '12px',
           borderRadius: '4px',
           fontFamily: 'monospace',
-          fontSize: '14px'
+          fontSize: '14px',
         }}
       >
-        {markdown}
-      </pre>
+        {lines.map((line, index) => {
+          const blockMathRegex = /\$\$([\s\S]+?)\$\$/g;
+          const parts = [];
+          let lastIndex = 0;
+          let match;
+
+          while ((match = blockMathRegex.exec(line)) !== null) {
+            parts.push(line.substring(lastIndex, match.index));
+            parts.push(<BlockMath key={`block-${index}-${match.index}`} math={match[1]} />);
+            lastIndex = blockMathRegex.lastIndex;
+          }
+          parts.push(line.substring(lastIndex));
+
+          return <div key={index}>{parts}</div>;
+        })}
+      </div>
     </div>
   );
 };

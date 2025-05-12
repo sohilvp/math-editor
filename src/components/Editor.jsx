@@ -1,3 +1,4 @@
+// Editor.js
 import React, { useState, useEffect, useRef } from 'react';
 import ReactQuill, { Quill } from 'react-quill';
 import MathEditor from './MathEditor';
@@ -22,45 +23,60 @@ const Editor = () => {
     setEditorHtml(html);
   };
 
-  const handleInsertFormula = (latex) => {
-    const quill = quillRef.current.getEditor();
-    if (expressionEditable && editingFormulaIndex !== null) {
-      const ops = quill.getContents().ops;
-      let formulaCount = -1;
-      let indexToReplace = 0;
+const handleInsertFormula = (latex) => {
 
-      for (let i = 0; i < ops.length; i++) {
-        const op = ops[i];
-        if (op.insert && op.insert.formula) {
-          formulaCount++;
-          if (formulaCount === editingFormulaIndex) break;
-        }
-        indexToReplace += typeof op.insert === 'string' ? op.insert.length : 1;
+  // Remove leading/trailing $$ if present
+  let cleanLatex = latex.trim();
+  if (cleanLatex.startsWith('$$') && cleanLatex.endsWith('$$')) {
+    cleanLatex = cleanLatex.slice(2, -2).trim();
+  }
+
+  // Check if the formula uses a large operator and needs display style
+  const needsDisplayStyle = /\\(sum|int|prod|lim)/.test(cleanLatex);
+  const finalLatex = needsDisplayStyle ? `\\displaystyle ${cleanLatex}` : cleanLatex;
+
+  const quill = quillRef.current.getEditor();
+  if (expressionEditable && editingFormulaIndex !== null) {
+    const ops = quill.getContents().ops;
+    let formulaCount = -1;
+    let indexToReplace = 0;
+
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i];
+      if (op.insert && op.insert.formula) {
+        formulaCount++;
+        if (formulaCount === editingFormulaIndex) break;
       }
-
-      quill.deleteText(indexToReplace, 1, 'user');
-      quill.insertEmbed(indexToReplace, 'formula', latex, 'user');
-      quill.insertText(indexToReplace + 1, ' ', 'user');
-      quill.setSelection(indexToReplace + 2, 0, 'user'); // Move cursor after formula+space
-    } else {
-      const range = quill.getSelection(true);
-      quill.insertEmbed(range.index, 'formula', latex, 'user');
-      quill.insertText(range.index + 1, ' ', 'user');
-      quill.setSelection(range.index + 2, 0, 'user'); // Move cursor after formula+space
+      indexToReplace += typeof op.insert === 'string' ? op.insert.length : 1;
     }
 
-    setMathEditorVisible(false);
-    setExpressionEditable(false);
-    setEditingFormulaIndex(null);
-  };
-
-  const handleCustomFormula = () => {
-    const quill = quillRef.current.getEditor();
+    quill.deleteText(indexToReplace, 1, 'user');
+    quill.insertEmbed(indexToReplace, 'formula', finalLatex, 'user');
+    quill.insertText(indexToReplace + 1, ' ', 'user');
+    quill.setSelection(indexToReplace + 2, 0, 'user');
+  } else {
     const range = quill.getSelection(true);
-    quill.insertEmbed(range.index, 'formula', 'x^2 + y^2 = z^2', 'user');
+    quill.insertEmbed(range.index, 'formula', finalLatex, 'user');
     quill.insertText(range.index + 1, ' ', 'user');
-    quill.setSelection(range.index + 2, 0, 'user'); // Move cursor after formula+space
-  };
+    quill.setSelection(range.index + 2, 0, 'user');
+  }
+
+  setMathEditorVisible(false);
+  setExpressionEditable(false);
+  setEditingFormulaIndex(null);
+};
+
+
+const handleCustomFormula = () => {
+  const quill = quillRef.current.getEditor();
+  const range = quill.getSelection(true);
+  const formula = '\\displaystyle \\sum_{i=1}^{n} i^2 = \\frac{n(n+1)(2n+1)}{6}';
+
+  quill.insertEmbed(range.index, 'formula', formula, 'user');
+  quill.insertText(range.index + 1, ' ', 'user');
+  quill.setSelection(range.index + 2, 0, 'user');
+};
+
 
   const toggleMathEditor = (e) => {
     if (e) e.preventDefault();
