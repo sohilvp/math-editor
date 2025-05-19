@@ -54,9 +54,38 @@ const MarkdownPreview = ({ html }) => {
   // Match and separate block math
   const segments = markdown.split(/(\$\$[\s\S]*?\$\$)/g);
 
+  // Download handler
+  const handleDownload = () => {
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'output.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div>
-      <h3>Markdown Output</h3>
+    <div style={{ position: 'relative', paddingTop: '8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 style={{ margin: 0, flex: 1 }}>Markdown Output</h3>
+        <button
+          onClick={handleDownload}
+          style={{
+            marginLeft: '12px',
+            padding: '6px 16px',
+            background: '#f6c674',
+            border: 'none',
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}
+        >
+          Download Markdown
+        </button>
+      </div>
       <div
         style={{
           whiteSpace: 'pre-wrap',
@@ -65,7 +94,9 @@ const MarkdownPreview = ({ html }) => {
           padding: '12px',
           borderRadius: '4px',
           fontFamily: 'monospace',
-          fontSize: '14px', // decreased from 14px
+          fontSize: '14px',
+          maxHeight: '70vh',
+          overflowY: 'auto'
         }}
       >
         {segments.map((segment, idx) => {
