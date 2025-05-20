@@ -4,8 +4,14 @@
     "mathlive": "^0.105.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-quill": "^2.0.0",
-    "turndown": "^7.2.0"
+    "react-router-dom": "^7.6.0",
+    "rehype-katex": "^7.0.1",
+    "rehype-raw": "^7.0.0",
+    "remark-math": "^6.0.0",
+    "turndown": "^7.2.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.1",

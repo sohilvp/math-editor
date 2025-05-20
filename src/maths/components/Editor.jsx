@@ -5,6 +5,8 @@ import MathEditor from './MathEditor';
 import 'react-quill/dist/quill.snow.css';
 import 'katex/dist/katex.min.css';
 import MarkdownPreview from './MarkdownPreview';
+import { v4 as uuidv4 } from 'uuid';
+import MarkdownRenderer from './MarkDownRenderer';
 
 // ✅ Register custom toolbar icon BEFORE component renders
 const icons = Quill.import('ui/icons');
@@ -17,8 +19,11 @@ const Editor = () => {
   const [expressionEditable, setExpressionEditable] = useState(false);
   const [editingFormulaIndex, setEditingFormulaIndex] = useState(null);
   const [editingLatex, setEditingLatex] = useState('');
+  const [pendingImages, setPendingImages] = useState({}); // { [uploadId]: File }
   const quillRef = useRef(null);
 
+  console.log("pendingImages", pendingImages);
+  
   const handleChange = (html) => {
     setEditorHtml(html);
   };
@@ -147,12 +152,10 @@ const Editor = () => {
     };
   }, [editorHtml]);
 
-  const uploadImageToGCP = useCallback(async (file) => {
-    // Step 1: Upload the file and get its GCS path.
-    // IMPORTANT: This assumes your backend '/api/upload' endpoint is modified
-    // to return a JSON response like { "filePath": "your-file-path-in-gcs" }.
+  const uploadImageToGCP = useCallback(async (file, uploadId) => {
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('uploadId', uploadId); // Pass uploadId
 
     const uploadResponse = await fetch('http://localhost:3001/api/upload', {
       method: 'POST',
@@ -221,19 +224,99 @@ const Editor = () => {
         const quill = quillRef.current.getEditor();
         const range = quill.getSelection(true);
 
-        // Show a temporary placeholder/loading image if desired
-        // quill.insertEmbed(range.index, 'image', 'loading-image-url', 'user');
+        // Generate a unique id for this image
+        const uploadId = `upload-img-${uuidv4()}`;
 
-        try {
-          const url = await uploadImageToGCP(file);
-          quill.insertEmbed(range.index, 'image', url, 'user');
+        // Use FileReader to read the file as a data URL for preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+
+          // Insert image with a custom attribute to identify it later
+          quill.insertEmbed(range.index, 'image', dataUrl, 'user');
+          setTimeout(() => {
+            const editor = quillRef.current && quillRef.current.editor && quillRef.current.editor.root;
+            if (editor) {
+              const imgs = editor.querySelectorAll(`img[src="${dataUrl}"]`);
+              imgs.forEach(imgEl => {
+                imgEl.setAttribute('data-upload-id', uploadId);
+                imgEl.style.opacity = '0.7';
+                imgEl.setAttribute('alt', 'Uploading...');
+              });
+            }
+          }, 0);
+
           quill.setSelection(range.index + 1, 0, 'user');
-        } catch (err) {
-          alert('Image upload failed');
-        }
+          setPendingImages(prev => ({ ...prev, [uploadId]: file }));
+        };
+        reader.onerror = () => {
+          alert('Failed to load image preview.');
+        };
+        reader.readAsDataURL(file);
       }
     };
-  }, [uploadImageToGCP]);
+  }, []);
+
+  // Upload all pending images to GCP and replace their src in the editor
+  const handleUploadAllImages = useCallback(async () => {
+    if (!quillRef.current) return;
+    // const quill = quillRef.current.getEditor();
+    // const editor = quillRef.current.editor.root;
+
+    for (const [uploadId, file] of Object.entries(pendingImages)) {
+      try {
+        // Upload to GCP
+        const url = await uploadImageToGCP(file, uploadId); // Pass uploadId here
+
+        // Do NOT update the image src or alt in the editor after upload
+        // Only remove the data-upload-id and opacity
+
+        const editor = quillRef.current && quillRef.current.editor && quillRef.current.editor.root;
+        if (editor) {
+          const imgs = editor.querySelectorAll(`img[data-upload-id="${uploadId}"]`);
+          imgs.forEach(img => {
+            // Do not change src or alt!
+            img.style.opacity = ''; // remove opacity
+            img.removeAttribute('data-upload-id');
+            // Do not set alt to uploadId, keep as is (alt stays 'Uploading...' or empty)
+          });
+        }
+
+        // Remove from pendingImages
+        setPendingImages(prev => {
+          const copy = { ...prev };
+          delete copy[uploadId];
+          return copy;
+        });
+      } catch (err) {
+        alert(`Image upload failed for one image: ${err.message}`);
+      }
+    }
+  }, [pendingImages, uploadImageToGCP]);
+
+  // Remove deleted images from pendingImages
+  useEffect(() => {
+    if (!quillRef.current) return;
+    const editor = quillRef.current.editor && quillRef.current.editor.root;
+    if (!editor) return;
+
+    // Collect all current upload-ids in the editor
+    const imgs = editor.querySelectorAll('img[data-upload-id]');
+    const presentIds = new Set();
+    imgs.forEach(img => {
+      const id = img.getAttribute('data-upload-id');
+      if (id) presentIds.add(id);
+    });
+
+    // Remove any pendingImages not present in the editor
+    setPendingImages(prev => {
+      const next = {};
+      for (const id in prev) {
+        if (presentIds.has(id)) next[id] = prev[id];
+      }
+      return next;
+    });
+  }, [editorHtml]);
 
   // ✅ Toolbar modules moved inside the component and memoized
   const modules = useMemo(() => ({
@@ -278,6 +361,25 @@ const Editor = () => {
   return (
     <div style={{ display: 'flex', width: '100%' }}>
       <div style={{ flex: 1, paddingRight: '16px', borderRight: '1px solid #eee' }}>
+        {/* Always show Upload Images Button, disable if no pending images */}
+        <button
+          onClick={handleUploadAllImages}
+          style={{
+            marginBottom: 8,
+            background: Object.keys(pendingImages).length > 0 ? '#ffe082' : '#eee',
+            border: 'none',
+            padding: '6px 12px',
+            borderRadius: 4,
+            cursor: Object.keys(pendingImages).length > 0 ? 'pointer' : 'not-allowed',
+            color: Object.keys(pendingImages).length > 0 ? '#333' : '#aaa'
+          }}
+          disabled={Object.keys(pendingImages).length === 0}
+        >
+          Upload Images
+          {Object.keys(pendingImages).length > 0 && (
+            <> ({Object.keys(pendingImages).length})</>
+          )}
+        </button>
         <ReactQuill
           ref={quillRef}
           onChange={handleChange}
