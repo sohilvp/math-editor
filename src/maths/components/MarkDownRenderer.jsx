@@ -1,13 +1,17 @@
 // MarkdownRenderer.js
 import React, { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+import { InlineMath, BlockMath } from 'react-katex';
 
 // Function to fetch markdown from API
 const fetchMarkdown = async (filePath) => {
   const response = await fetch('http://localhost:3001/api/get-markdown', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({  filePath:"text-editor_app/usersmarkdown/markdown-1747736779780.md" }),
+    body: JSON.stringify({  filePath:"text-editor_app/usersmarkdown/markdown-1747738247845.md" }),
   });
   if (!response.ok) throw new Error('Failed to fetch markdown');
   const data = await response.json();
@@ -63,7 +67,7 @@ const MarkdownRenderer = ({ filePath = '' }) => {
 
   if (error) return <div>Error: {error}</div>;
 
-  // Custom image renderer
+  // Custom image and math renderer
   const components = {
     img: ({ src, alt }) => {
       // Normalize src to remove leading './' or '/'
@@ -80,11 +84,29 @@ const MarkdownRenderer = ({ filePath = '' }) => {
       }
       return <img src={src} alt={alt} style={{ maxWidth: '100%' }} />;
     },
+    math: ({ value, node }) => {
+      // If the math node is not surrounded by blank lines, render inline
+      // node.position.start/position.end gives us line/column info
+      // We'll check if the parent is a paragraph (inline context)
+      if (node?.position?.start?.line === node?.position?.end?.line) {
+        // Single line, treat as inline
+        return <InlineMath math={value} />;
+      }
+      // Otherwise, treat as block
+      return <BlockMath math={value} />;
+    },
+    inlineMath: ({ value }) => <InlineMath math={value} />,
   };
 
   return (
     <div style={{ padding: 16 }}>
-      <ReactMarkdown components={components}>{markdown}</ReactMarkdown>
+      <ReactMarkdown
+        components={components}
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+      >
+        {markdown}
+      </ReactMarkdown>
     </div>
   );
 };
